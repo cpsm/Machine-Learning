@@ -1,0 +1,126 @@
+---
+title: "Human Activity Recognition -Machine Learning Project"
+author: "Simon"
+date: "Wednesday, March 18, 2015"
+output: html_document
+---
+### Introduction of the Project
+
+Human activity Recognition has emerged as the key area of research for a long period time. There are various method developed using context-aware systems.
+Using devices such as Jawbone up, Nike FuelBand and Fitbit it is possible to collect large amount of data about the personal activities. These devices has become part of the regular health improvement activities, to quantify how well they have performed in the health improvement activities.
+We acknowledge availability of data for these type of project from ": http://groupware.les.inf.puc-rio.br/har." the website.
+
+### Data used for this project
+
+As mentioned in the introduction the data for the project was available from the website : http://groupware.les.inf.puc-rio.br/har. The training ans test data is downloaded from the following website
+Training data :https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+Test data :https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The training and test data downloaded from these website using the following piece of r codes
+
+```{r,message=FALSE,warning=FALSE}
+setInternet2(TRUE)
+library(caret)
+library(RCurl)
+library(R.utils)
+library(randomForest)
+```
+```{r}
+loadReadfile <- function(name,parameters){
+  tempfile <- tempfile()
+  download.file(name,tempfile)
+  tempdata <- read.csv(tempfile, na.strings =parameters)
+  unlink(tempfile)
+  return(tempdata)
+}
+
+traindata <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+trainingdata <- loadReadfile (traindata,c("","NA","#DIV/0!"))
+                                      
+testdata <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testingdata <- loadReadfile(testdata,c("","NA","#DIV/0!"))
+dim(trainingdata)
+table (trainingdata$classe)
+
+```
+The downloaded training data has 19622 observations and 160 features.
+The training data is converted into 5 measure instances.
+
+### Partitioning and preprocessing data
+
+The training data is separated into a training set and validate set. 80% of the data is for training and 20% for validations 
+
+
+```{r}
+set.seed(196220)
+iniTrain <- createDataPartition(trainingdata$classe,p=0.8,list=FALSE)
+training <- trainingdata[iniTrain,]
+validdate <- trainingdata[-iniTrain,]
+```
+In the clan up p reprocessing stage we do the following operations
+1.  Remove all near zero variance features using nearZeroVar function
+2. Remove the descriptive columns from the training data set since it don't impact the model
+3. Exclude the columns having more than 60% missing values
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+## Exclude the near zero or zero variance predicators (one unique value)
+
+zvarcolums <- nearZeroVar(training)
+ 
+training <- training[,-zvarcolums]
+# exclude the descriptive values columns and time stamps
+descol <- c("X", "user_name", "raw_timestamp_part_1", 
+            "raw_timestamp_part_2", "cvtd_timestamp", 
+            "new_window", "num_window")
+training <- training [,!names(training)%in% descol]
+
+# exclude the columns with 40percentage and more missing values and NA
+nacollength <- sapply(training,function(x){sum(!(is.na(x)|x==""))})
+nullvaluecol <- names(nacollength[nacollength <0.6 *length(training$classe)])
+training <- training[,!names(training)%in% nullvaluecol]
+```
+### Predication Model
+We use random forest algorithm to predict the model. By using this algorithm we provide additional layer of randomness to bagging . In addition to constructing each tree using different bootstrap sample of data, random forest change how classification or regression trees constructed.
+
+```{r}
+library(randomForest)
+# since the data is large create a model with random Forest
+fitMod <- randomForest(classe~.,data=training,importance=TRUE,ntrees=10)
+# fit the model prediction in training data set
+fitModPred <- predict(fitMod,training)
+# check the accuracy of the predication
+print(confusionMatrix(fitModPred,training$classe))
+
+```
+The prediction value against training set has got the accuracy 1 .We have to validate this model with validation data to conclude the accuracy of our predication
+
+
+```{r}
+fitModVal <- predict(fitMod,validdate)
+
+print(confusionMatrix(fitModVal,validdate$classe))
+```
+The performance of the model with validation data is 99.37% accuracy with .63% of data sample error which can be neglected
+### Predication algorithm testing using test data
+
+```{r}
+fitModtest <- predict(fitMod,testingdata)
+fitModtest
+```
+### Prediction Assignment Submission
+```{r}
+answers <- as.vector(fitModtest)
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+
+```
+
+```
